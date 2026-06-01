@@ -1,5 +1,4 @@
-# Create the complete working app as a Python string
-app_code = '''"""
+"""
 NSW EV Intelligence Platform - Databricks App
 Minimal working version
 """
@@ -95,24 +94,3 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('DATABRICKS_APP_PORT', 8000))
     app.run(host='0.0.0.0', port=port, debug=False)
-'''
-
-# Write to workspace
-output_path = '/Workspace/Users/moeedk1@gmail.com/FINAL_WORKING_app.py'
-with open(output_path, 'w', encoding='utf-8') as f:
-    f.write(app_code)
-
-# Verify it's valid Python
-import ast
-try:
-    ast.parse(app_code)
-    print("✓ File created successfully!")
-    print("✓ Syntax is VALID")
-    print(f"✓ File size: {len(app_code)} bytes")
-    print(f"✓ Location: {output_path}")
-    print("")
-    print("=" * 70)
-    print("DOWNLOAD THIS FILE AND UPLOAD TO GITHUB")
-    print("=" * 70)
-except SyntaxError as e:
-    print(f"✗ Syntax error: {e}")
