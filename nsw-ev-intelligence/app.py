@@ -2,7 +2,7 @@
 NSW EV Intelligence Platform - Databricks App
 Full-featured web interface with intelligent backend
 """
-!pip install Flask==2.3.0 flask-cors==4.0.0
+
 from flask import Flask, render_template_string, request, jsonify
 from datetime import datetime
 from math import radians, cos, sin, asin, sqrt
