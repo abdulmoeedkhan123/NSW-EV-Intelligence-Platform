@@ -145,12 +145,19 @@ def get_consumer_intelligence(
                 .limit(10) \
                 .collect()
             
-            # Format the results
+            # Format the results (NULL-safe)
             charging_stations = []
             for row in nearest_stations:
+                # Use address first part as name if station_name is NULL
+                display_name = row.station_name
+                if not display_name and row.station_address:
+                    display_name = row.station_address.split(',')[0].strip()
+                if not display_name:
+                    display_name = f"Station {row.objectid}"
+                
                 charging_stations.append({
-                    "name": row.station_name,
-                    "address": row.station_address,
+                    "name": display_name,
+                    "address": row.station_address if row.station_address else "Address not available",
                     "distance_km": round(row.distance_km, 2),
                     "latitude": row.latitude,
                     "longitude": row.longitude,
