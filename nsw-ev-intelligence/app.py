@@ -64,6 +64,11 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 # INTELLIGENCE FUNCTIONS
 # ============================================================================
 
+"""
+Fixed intelligence function for NSW EV Platform
+Returns REAL data from Unity Catalog tables
+"""
+
 def get_consumer_intelligence(
     lat: float,
     lon: float,
@@ -94,51 +99,125 @@ def get_consumer_intelligence(
         }
     
     try:
+        from pyspark.sql import functions as F
+        from pyspark.sql.types import DoubleType
+        from math import radians, cos, sin, asin, sqrt
+        
         insights = {}
         
-        # 1. Get nearest charging stations
+        # ========================================================================
+        # 1. Get nearest charging stations - REAL DATA
+        # ========================================================================
         try:
+            # Register distance UDF
+            def calc_distance(lat1, lon1, lat2, lon2):
+                if None in [lat1, lon1, lat2, lon2]:
+                    return None
+                lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+                dlon = lon2 - lon1
+                dlat = lat2 - lat1
+                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                c = 2 * asin(sqrt(a))
+                return c * 6371
+            
+            distance_udf = F.udf(calc_distance, DoubleType())
+            
+            # Query charging stations
             charging_df = spark.table("mobility_ai.gold.charger_recommendations_smart")
+            
+            # Filter valid locations and calculate distance
+            stations_with_distance = charging_df \
+                .filter(F.col("has_valid_location") == True) \
+                .withColumn("distance_km", 
+                           distance_udf(F.lit(lat), F.lit(lon), 
+                                      F.col("latitude"), F.col("longitude"))) \
+                .filter(F.col("distance_km") <= max_distance_km)
+            
+            # Apply charger type filter if specified
+            if charger_type:
+                stations_with_distance = stations_with_distance.filter(
+                    F.col("charger__type") == charger_type
+                )
+            
+            # Get top 10 nearest stations
+            nearest_stations = stations_with_distance \
+                .orderBy(F.col("distance_km").asc()) \
+                .limit(10) \
+                .collect()
+            
+            # Format the results
+            charging_stations = []
+            for row in nearest_stations:
+                charging_stations.append({
+                    "name": row.station_name,
+                    "address": row.station_address,
+                    "distance_km": round(row.distance_km, 2),
+                    "latitude": row.latitude,
+                    "longitude": row.longitude,
+                    "operator": row.operator,
+                    "number_of_plugs": row.number_of_plugs,
+                    "charger_type": row.charger__type,
+                    "charging_speed": row.charging_speed,
+                    "power_kw": row.charger_rating_kw,
+                    "recommendation_tier": row.recommendation_tier,
+                    "recommendation_score": row.recommendation_score,
+                    "accessibility_score": row.accessibility_score,
+                    "nearby_hazards": row.nearby_hazards_count,
+                    "hazard_types": row.hazard_types if row.hazard_types else [],
+                    "postcode": row.pcode
+                })
+            
             insights["charging_stations"] = {
-                "stations_found": charging_df.count(),
-                "charging_stations": [
-                    {
-                        "name": "Sample Station",
-                        "address": f"Near {lat}, {lon}",
-                        "distance_km": 5.2,
-                        "charging_speed": "Fast",
-                        "power_kw": 50,
-                        "recommendation_tier": "Recommended"
-                    }
-                ]
+                "stations_found": len(charging_stations),
+                "charging_stations": charging_stations,
+                "search_radius_km": max_distance_km,
+                "user_location": {"lat": lat, "lon": lon}
             }
+            
         except Exception as e:
             insights["charging_stations"] = {
                 "stations_found": 0,
-                "error": f"Table access error: {str(e)}"
+                "error": f"Table access error: {str(e)}",
+                "message": "Could not retrieve charging station data"
             }
         
-        # 2. Get fuel options
+        # ========================================================================
+        # 2. Get fuel options (placeholder for future implementation)
+        # ========================================================================
         insights["fuel_options"] = {
             "regions_found": 0,
-            "fuel_recommendations": []
+            "fuel_recommendations": [],
+            "message": "Feature coming soon"
         }
         
-        # 3. Get congestion forecast
+        # ========================================================================
+        # 3. Get congestion forecast (placeholder for future implementation)
+        # ========================================================================
         insights["congestion_forecast"] = {
-            "nearby_risk_areas": []
+            "nearby_risk_areas": [],
+            "message": "Feature coming soon"
         }
         
+        # ========================================================================
         # 4. Trip intelligence (if destination provided)
+        # ========================================================================
         if destination_lat and destination_lon:
             trip_distance = haversine_distance(lat, lon, destination_lat, destination_lon)
+            
+            # Estimate charging needs (assuming 400km range)
+            charging_stops = max(0, int((trip_distance - 400) / 300))
+            
             insights["trip_intelligence"] = {
                 "calculated_distance_km": round(trip_distance, 2),
                 "charging_requirements": {
-                    "charging_stops_needed": 0 if trip_distance < 300 else 1,
-                    "total_trip_time_hours": trip_distance / 80,
-                    "trip_feasibility": "Feasible",
-                    "recommended_charger_type": "Fast"
+                    "charging_stops_needed": charging_stops,
+                    "total_trip_time_hours": round(trip_distance / 80, 1),
+                    "trip_feasibility": "Feasible" if trip_distance < 1000 else "Long distance - plan carefully",
+                    "recommended_charger_type": "Fast" if trip_distance > 100 else "Standard"
+                },
+                "route_summary": {
+                    "origin": {"lat": lat, "lon": lon},
+                    "destination": {"lat": destination_lat, "lon": destination_lon}
                 }
             }
         else:
@@ -157,11 +236,9 @@ def get_consumer_intelligence(
         return {
             "status": "error",
             "message": str(e),
-            "insights": {}
+            "insights": {},
+            "traceback": traceback.format_exc()
         }
-
-# ============================================================================
-# HTML TEMPLATE (Original full-featured interface)
 # ============================================================================
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
