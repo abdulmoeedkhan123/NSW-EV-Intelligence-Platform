@@ -1,0 +1,1250 @@
+{
+  "datasets": [
+    {
+      "name": "regional_metrics",
+      "displayName": "Regional Infrastructure Metrics",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.regional_infrastructure_metrics"
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    },
+    {
+      "name": "charger_gaps",
+      "displayName": "Infrastructure Gaps Analysis",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.charger_recommendations_gaps"
+      ],
+      "columns": [
+        {
+          "displayName": "Critical Gap Count",
+          "description": "Count of critical infrastructure gaps",
+          "expression": "CASE WHEN `gap_category` = 'Critical' THEN 1 ELSE 0 END"
+        }
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    },
+    {
+      "name": "charger_nearest",
+      "displayName": "Nearest Chargers by Location",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.charger_recommendations_nearest\n",
+        "WHERE\n",
+        "  rank <= 5"
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    },
+    {
+      "name": "charger_smart",
+      "displayName": "Smart Charger Recommendations",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.charger_recommendations_smart"
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    },
+    {
+      "name": "trip_charging",
+      "displayName": "Trip Charging Requirements",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.trip_charging_requirements"
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    },
+    {
+      "name": "trip_routes",
+      "displayName": "Trip Routes Optimal",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.trip_routes_optimal"
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    },
+    {
+      "name": "congestion_location",
+      "displayName": "Congestion Forecast Location",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.congestion_forecast_location"
+      ],
+      "columns": [
+        {
+          "displayName": "High Risk Count",
+          "description": "Count of high or critical risk locations",
+          "expression": "CASE WHEN `risk_level` IN ('High', 'Critical') THEN 1 ELSE 0 END"
+        }
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    },
+    {
+      "name": "congestion_hourly",
+      "displayName": "Congestion Forecast Hourly",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.congestion_forecast_hourly"
+      ],
+      "columns": [
+        {
+          "displayName": "Peak Hour Count",
+          "description": "Count of peak hour records",
+          "expression": "CASE WHEN `is_peak_hour` = true THEN 1 ELSE 0 END"
+        }
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    },
+    {
+      "name": "trip_recommendations",
+      "displayName": "Trip Recommendations",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  mobility_ai.gold.trip_recommendations"
+      ],
+      "catalog": "mobility_ai",
+      "schema": "gold"
+    }
+  ],
+  "pages": [
+    {
+      "name": "02e4cc41",
+      "displayName": "Regional Infrastructure",
+      "layout": [
+        {
+          "widget": {
+            "name": "total_ev_stations",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "regional_metrics",
+                  "fields": [
+                    {
+                      "name": "sum(ev_station_count)",
+                      "expression": "SUM(`ev_station_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total EV Stations",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(ev_station_count)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "total_capacity",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "regional_metrics",
+                  "fields": [
+                    {
+                      "name": "sum(total_capacity_kw)",
+                      "expression": "SUM(`total_capacity_kw`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Capacity (kW)",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_capacity_kw)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "avg_ev_readiness",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "regional_metrics",
+                  "fields": [
+                    {
+                      "name": "avg(ev_readiness_score)",
+                      "expression": "AVG(`ev_readiness_score`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Avg EV Readiness Score",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(ev_readiness_score)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "ev_readiness_by_region",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "regional_metrics",
+                  "fields": [
+                    {
+                      "name": "region",
+                      "expression": "`region`"
+                    },
+                    {
+                      "name": "ev_readiness_score",
+                      "expression": "`ev_readiness_score`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "EV Readiness by Region",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "region",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "ev_readiness_score",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "station_distribution",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "regional_metrics",
+                  "fields": [
+                    {
+                      "name": "region",
+                      "expression": "`region`"
+                    },
+                    {
+                      "name": "ev_station_count",
+                      "expression": "`ev_station_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Station Distribution by Region",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "region",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "ev_station_count",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 5
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "charger_recommendations",
+      "displayName": "Charger Recommendations",
+      "layout": [
+        {
+          "widget": {
+            "name": "charging_speed_dist",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "charging_speed",
+                      "expression": "`charging_speed`"
+                    },
+                    {
+                      "name": "number_of_plugs",
+                      "expression": "`number_of_plugs`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Charging Speed Distribution",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "charging_speed",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "number_of_plugs",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "critical_gaps",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_gaps",
+                  "fields": [
+                    {
+                      "name": "sum(Critical Gap Count)",
+                      "expression": "SUM(`Critical Gap Count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Critical Gaps Counter",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(Critical Gap Count)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "trip_intelligence",
+      "displayName": "Trip Intelligence",
+      "layout": [
+        {
+          "widget": {
+            "name": "high_risk_locations",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_location",
+                  "fields": [
+                    {
+                      "name": "sum(High Risk Count)",
+                      "expression": "SUM(`High Risk Count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "High-Risk Locations",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(High Risk Count)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "route_risk_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "trip_routes",
+                  "fields": [
+                    {
+                      "name": "route_safety_rating",
+                      "expression": "`route_safety_rating`"
+                    },
+                    {
+                      "name": "route_risk_score",
+                      "expression": "`route_risk_score`"
+                    },
+                    {
+                      "name": "active_hazards",
+                      "expression": "`active_hazards`"
+                    },
+                    {
+                      "name": "estimated_delay_minutes",
+                      "expression": "`estimated_delay_minutes`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Route Risk Analysis",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "route_safety_rating"
+                  },
+                  {
+                    "fieldName": "route_risk_score",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "active_hazards",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "estimated_delay_minutes",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 9,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "charging_requirements",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "trip_charging",
+                  "fields": [
+                    {
+                      "name": "trip_distance_km",
+                      "expression": "`trip_distance_km`"
+                    },
+                    {
+                      "name": "charging_stops_needed",
+                      "expression": "`charging_stops_needed`"
+                    },
+                    {
+                      "name": "total_trip_time_hours",
+                      "expression": "`total_trip_time_hours`"
+                    },
+                    {
+                      "name": "trip_feasibility",
+                      "expression": "`trip_feasibility`"
+                    },
+                    {
+                      "name": "recommended_charger_type",
+                      "expression": "`recommended_charger_type`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Charging Requirements by Trip Distance",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "trip_distance_km",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "charging_stops_needed",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "total_trip_time_hours",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 1
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "trip_feasibility"
+                  },
+                  {
+                    "fieldName": "recommended_charger_type"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "best_travel_windows",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "trip_recommendations",
+                  "fields": [
+                    {
+                      "name": "hour_of_day",
+                      "expression": "`hour_of_day`"
+                    },
+                    {
+                      "name": "day_name",
+                      "expression": "`day_name`"
+                    },
+                    {
+                      "name": "trip_window_category",
+                      "expression": "`trip_window_category`"
+                    },
+                    {
+                      "name": "trip_suitability_score",
+                      "expression": "`trip_suitability_score`"
+                    },
+                    {
+                      "name": "trip_advice",
+                      "expression": "`trip_advice`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Best Travel Windows",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "hour_of_day",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "day_name"
+                  },
+                  {
+                    "fieldName": "trip_window_category"
+                  },
+                  {
+                    "fieldName": "trip_suitability_score",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "trip_advice"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 6
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "congestion_forecast",
+      "displayName": "Congestion Forecast",
+      "layout": [
+        {
+          "widget": {
+            "name": "total_hazards_counter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_hourly",
+                  "fields": [
+                    {
+                      "name": "sum(active_hazards)",
+                      "expression": "SUM(`active_hazards`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Active Hazards",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(active_hazards)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "avg_congestion_score",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_hourly",
+                  "fields": [
+                    {
+                      "name": "avg(congestion_score)",
+                      "expression": "AVG(`congestion_score`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Avg Congestion Score",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(congestion_score)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "congestion_by_hour",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_hourly",
+                  "fields": [
+                    {
+                      "name": "hour_of_day",
+                      "expression": "`hour_of_day`"
+                    },
+                    {
+                      "name": "avg(congestion_score)",
+                      "expression": "AVG(`congestion_score`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Congestion Score by Hour of Day",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "hour_of_day",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(congestion_score)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "congestion_trend_line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_hourly",
+                  "fields": [
+                    {
+                      "name": "hour_of_day",
+                      "expression": "`hour_of_day`"
+                    },
+                    {
+                      "name": "avg(congestion_score)",
+                      "expression": "AVG(`congestion_score`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Hourly Congestion Trend",
+                "showTitle": true
+              },
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "hour_of_day",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(congestion_score)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "hazards_by_day",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_hourly",
+                  "fields": [
+                    {
+                      "name": "day_name",
+                      "expression": "`day_name`"
+                    },
+                    {
+                      "name": "sum(total_hazards)",
+                      "expression": "SUM(`total_hazards`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Hazards by Day of Week",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "day_name",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_hazards)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "risk_hotspots_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_location",
+                  "fields": [
+                    {
+                      "name": "location",
+                      "expression": "`location`"
+                    },
+                    {
+                      "name": "risk_level",
+                      "expression": "`risk_level`"
+                    },
+                    {
+                      "name": "risk_score",
+                      "expression": "`risk_score`"
+                    },
+                    {
+                      "name": "active_hazards",
+                      "expression": "`active_hazards`"
+                    },
+                    {
+                      "name": "major_hazards",
+                      "expression": "`major_hazards`"
+                    },
+                    {
+                      "name": "dominant_hazard_type",
+                      "expression": "`dominant_hazard_type`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Risk Hotspots by Location",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "location"
+                  },
+                  {
+                    "fieldName": "risk_level"
+                  },
+                  {
+                    "fieldName": "risk_score",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "active_hazards",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "major_hazards",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "dominant_hazard_type"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 8,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "peak_hours_counter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_hourly",
+                  "fields": [
+                    {
+                      "name": "sum(Peak Hour Count)",
+                      "expression": "SUM(`Peak Hour Count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Peak Hours",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(Peak Hour Count)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "peak_period_details",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_hourly",
+                  "fields": [
+                    {
+                      "name": "hour_of_day",
+                      "expression": "`hour_of_day`"
+                    },
+                    {
+                      "name": "day_name",
+                      "expression": "`day_name`"
+                    },
+                    {
+                      "name": "congestion_level",
+                      "expression": "`congestion_level`"
+                    },
+                    {
+                      "name": "congestion_score",
+                      "expression": "`congestion_score`"
+                    },
+                    {
+                      "name": "active_hazards",
+                      "expression": "`active_hazards`"
+                    },
+                    {
+                      "name": "is_peak_hour",
+                      "expression": "`is_peak_hour`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Peak Period Details",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "hour_of_day",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "day_name"
+                  },
+                  {
+                    "fieldName": "congestion_level"
+                  },
+                  {
+                    "fieldName": "congestion_score",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "active_hazards",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "is_peak_hour"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 13,
+            "width": 12,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "high_risk_locations",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "congestion_location",
+                  "fields": [
+                    {
+                      "name": "sum(High Risk Count)",
+                      "expression": "SUM(`High Risk Count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "High-Risk Locations",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(High Risk Count)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
