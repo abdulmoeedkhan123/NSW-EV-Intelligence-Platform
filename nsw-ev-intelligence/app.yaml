@@ -3,7 +3,7 @@
 
 command:
   - python
-  - app_with_sql.py
+  - app.py
 
 # Environment variables (Databricks Apps automatically provide these)
 env:
@@ -14,4 +14,4 @@ env:
     valueFrom:
       serviceAccountToken: {}
   - name: DATABRICKS_HTTP_PATH
-    value: "/sql/1.0/warehouses/35a820df41c9ad96"  # Update with your SQL warehouse HTTP path
+    value: "/sql/1.0/warehouses/35a820df41c9ad96"
