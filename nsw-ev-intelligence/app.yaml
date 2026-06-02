@@ -1,17 +1,7 @@
-# Databricks App Configuration
-# Using SQL connector - no Java/Spark environment needed
-
 command:
   - python
   - app.py
 
-# Environment variables (Databricks Apps automatically provide these)
 env:
-  - name: DATABRICKS_HOST
-    valueFrom:
-      databricksInstance: {}
-  - name: DATABRICKS_TOKEN
-    valueFrom:
-      serviceAccountToken: {}
   - name: DATABRICKS_HTTP_PATH
-    value: "/sql/1.0/warehouses/35a820df41c9ad96"
+    value: /sql/1.0/warehouses/35a820df41c9ad96
