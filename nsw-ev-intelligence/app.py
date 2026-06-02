@@ -307,7 +307,7 @@ def query_intelligence():
         }), 400
 
 # ============================================================================
-# HTML TEMPLATE
+# HTML TEMPLATE - FIXED TO SHOW ERRORS
 # ============================================================================
 
 HTML_TEMPLATE = '''
@@ -389,6 +389,14 @@ HTML_TEMPLATE = '''
             border-radius: 8px;
             border-left: 4px solid #667eea;
         }
+        .error-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            color: #856404;
+        }
         .loading {
             text-align: center;
             color: #667eea;
@@ -467,17 +475,38 @@ HTML_TEMPLATE = '''
             const results = document.getElementById('results');
             
             if (data.status === 'error') {
-                results.innerHTML = `<p style="color: red;">${data.message}</p>`;
+                results.innerHTML = `
+                    <div class="error-box">
+                        <h3>❌ Error</h3>
+                        <p>${data.message}</p>
+                    </div>
+                `;
                 results.style.display = 'block';
                 return;
             }
             
             let html = '<h2>📍 Charging Stations Nearby</h2>';
             
-            const stations = data.insights.charging_stations?.charging_stations || [];
+            const chargingData = data.insights.charging_stations || {};
+            const stations = chargingData.charging_stations || [];
             
-            if (stations.length === 0) {
-                html += '<p>No charging stations found.</p>';
+            // Check for query error
+            if (chargingData.error) {
+                html += `
+                    <div class="error-box">
+                        <h3>⚠️ Database Query Error</h3>
+                        <p><strong>Error:</strong> ${chargingData.error}</p>
+                        <p><strong>Message:</strong> ${chargingData.message}</p>
+                        <p style="margin-top: 10px;">This usually means:</p>
+                        <ul style="margin-left: 20px; margin-top: 5px;">
+                            <li>Database connection failed</li>
+                            <li>App service principal lacks table permissions</li>
+                            <li>SQL warehouse is stopped</li>
+                        </ul>
+                    </div>
+                `;
+            } else if (stations.length === 0) {
+                html += '<p>No charging stations found within the specified radius.</p>';
             } else {
                 stations.forEach(station => {
                     html += `
