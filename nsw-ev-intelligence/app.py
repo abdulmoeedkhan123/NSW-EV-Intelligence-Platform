@@ -1,51 +1,52 @@
 """
-NSW EV Intelligence Platform - Databricks App
-Full-featured web interface with intelligent backend
+NSW EV Intelligence Platform - Databricks App with SQL Connector
+Uses Databricks SQL instead of Spark for lighter weight execution
 """
 
 from flask import Flask, render_template_string, request, jsonify
 from datetime import datetime
 from math import radians, cos, sin, asin, sqrt
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import json
 import os
 
 app = Flask(__name__)
 
 # ============================================================================
-# LAZY SPARK INITIALIZATION (only when needed)
+# DATABRICKS SQL CONNECTION (replaces Spark)
 # ============================================================================
 
-_spark = None
-_spark_failed = False
+_sql_connection = None
+_sql_failed = False
 
-def get_spark():
-    """Get or create Spark session - only initialized when first query is made"""
-    global _spark, _spark_failed
+def get_sql_connection():
+    """Get or create Databricks SQL connection - only initialized when first query is made"""
+    global _sql_connection, _sql_failed
     
-    if _spark_failed:
+    if _sql_failed:
         return None
         
-    if _spark is None:
+    if _sql_connection is None:
         try:
-            from pyspark.sql import SparkSession
-            _spark = SparkSession.builder.getOrCreate()
-            print("✓ Spark session initialized successfully")
+            from databricks import sql
+            
+            # Databricks Apps automatically provide these environment variables
+            server_hostname = os.getenv("DATABRICKS_HOST", "").replace("https://", "")
+            http_path = os.getenv("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/your-warehouse-id")
+            access_token = os.getenv("DATABRICKS_TOKEN")
+            
+            _sql_connection = sql.connect(
+                server_hostname=server_hostname,
+                http_path=http_path,
+                credentials_provider=lambda: access_token
+            )
+            print("✓ Databricks SQL connection initialized successfully")
         except Exception as e:
-            print(f"⚠ Spark initialization failed: {e}")
-            _spark_failed = True
+            print(f"⚠ SQL connection failed: {e}")
+            _sql_failed = True
             return None
     
-    return _spark
-
-def get_spark_functions():
-    """Get PySpark functions if Spark is available"""
-    try:
-        from pyspark.sql import functions as F
-        from pyspark.sql.types import DoubleType
-        return F, DoubleType
-    except:
-        return None, None
+    return _sql_connection
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -53,6 +54,8 @@ def get_spark_functions():
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance between two points in kilometers"""
+    if None in [lat1, lon1, lat2, lon2]:
+        return None
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
     dlon = lon2 - lon1 
     dlat = lat2 - lat1 
@@ -61,13 +64,8 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return c * 6371
 
 # ============================================================================
-# INTELLIGENCE FUNCTIONS
+# INTELLIGENCE FUNCTIONS USING SQL
 # ============================================================================
-
-"""
-Fixed intelligence function for NSW EV Platform
-Returns REAL data from Unity Catalog tables
-"""
 
 def get_consumer_intelligence(
     lat: float,
@@ -81,98 +79,114 @@ def get_consumer_intelligence(
     hour_of_day: Optional[int] = None
 ) -> Dict:
     """
-    Main intelligence function - queries Unity Catalog tables for EV insights
+    Main intelligence function - queries Unity Catalog tables using SQL
     """
     
-    spark = get_spark()
+    conn = get_sql_connection()
     
-    if spark is None:
+    if conn is None:
         return {
             "status": "limited",
-            "message": "Running in limited mode - Spark not available",
+            "message": "Running in limited mode - Database connection not available",
             "insights": {
-                "charging_stations": {"stations_found": 0, "message": "Spark required for data queries"},
-                "fuel_options": {"regions_found": 0, "message": "Spark required for data queries"},
-                "congestion_forecast": {"nearby_risk_areas": [], "message": "Spark required for data queries"},
+                "charging_stations": {"stations_found": 0, "message": "Database required for queries"},
+                "fuel_options": {"regions_found": 0, "message": "Database required for queries"},
+                "congestion_forecast": {"nearby_risk_areas": [], "message": "Database required for queries"},
                 "trip_intelligence": None
             }
         }
     
     try:
-        from pyspark.sql import functions as F
-        from pyspark.sql.types import DoubleType
-        from math import radians, cos, sin, asin, sqrt
-        
         insights = {}
         
         # ========================================================================
-        # 1. Get nearest charging stations - REAL DATA
+        # 1. Get nearest charging stations using SQL
         # ========================================================================
         try:
-            # Register distance UDF
-            def calc_distance(lat1, lon1, lat2, lon2):
-                if None in [lat1, lon1, lat2, lon2]:
-                    return None
-                lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-                dlon = lon2 - lon1
-                dlat = lat2 - lat1
-                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-                c = 2 * asin(sqrt(a))
-                return c * 6371
+            cursor = conn.cursor()
             
-            distance_udf = F.udf(calc_distance, DoubleType())
+            # Build SQL query with Haversine distance calculation
+            # Note: We calculate distance in SQL using the Haversine formula
+            sql_query = f"""
+            WITH station_distances AS (
+                SELECT 
+                    *,
+                    -- Haversine distance calculation in SQL
+                    2 * 6371 * ASIN(SQRT(
+                        POW(SIN(RADIANS(latitude - {lat}) / 2), 2) +
+                        COS(RADIANS({lat})) * COS(RADIANS(latitude)) *
+                        POW(SIN(RADIANS(longitude - {lon}) / 2), 2)
+                    )) AS distance_km
+                FROM mobility_ai.gold.charger_recommendations_smart
+                WHERE has_valid_location = TRUE
+            )
+            SELECT 
+                objectid,
+                station_name,
+                station_address,
+                distance_km,
+                latitude,
+                longitude,
+                operator,
+                number_of_plugs,
+                charger__type,
+                charging_speed,
+                charger_rating_kw,
+                recommendation_tier,
+                recommendation_score,
+                accessibility_score,
+                nearby_hazards_count,
+                hazard_types,
+                pcode
+            FROM station_distances
+            WHERE distance_km <= {max_distance_km}
+            """
             
-            # Query charging stations
-            charging_df = spark.table("mobility_ai.gold.charger_recommendations_smart")
-            
-            # Filter valid locations and calculate distance
-            stations_with_distance = charging_df \
-                .filter(F.col("has_valid_location") == True) \
-                .withColumn("distance_km", 
-                           distance_udf(F.lit(lat), F.lit(lon), 
-                                      F.col("latitude"), F.col("longitude"))) \
-                .filter(F.col("distance_km") <= max_distance_km)
-            
-            # Apply charger type filter if specified
+            # Add charger type filter if specified
             if charger_type:
-                stations_with_distance = stations_with_distance.filter(
-                    F.col("charger__type") == charger_type
-                )
+                sql_query += f" AND charger__type = '{charger_type}'"
             
-            # Get top 10 nearest stations
-            nearest_stations = stations_with_distance \
-                .orderBy(F.col("distance_km").asc()) \
-                .limit(10) \
-                .collect()
+            sql_query += " ORDER BY distance_km ASC LIMIT 10"
             
-            # Format the results (NULL-safe)
+            # Execute query
+            cursor.execute(sql_query)
+            
+            # Fetch results
             charging_stations = []
-            for row in nearest_stations:
+            for row in cursor.fetchall():
+                # Unpack row (cursor returns tuples)
+                (objectid, station_name, station_address, distance_km, latitude, longitude,
+                 operator, number_of_plugs, charger_type_val, charging_speed, power_kw,
+                 recommendation_tier, recommendation_score, accessibility_score,
+                 nearby_hazards, hazard_types, pcode) = row
+                
                 # Use address first part as name if station_name is NULL
-                display_name = row.station_name
-                if not display_name and row.station_address:
-                    display_name = row.station_address.split(',')[0].strip()
+                display_name = station_name
+                if not display_name and station_address:
+                    display_name = station_address.split(',')[0].strip()
                 if not display_name:
-                    display_name = f"Station {row.objectid}"
+                    display_name = f"Station {objectid}"
                 
                 charging_stations.append({
                     "name": display_name,
-                    "address": row.station_address if row.station_address else "Address not available",
-                    "distance_km": round(row.distance_km, 2),
-                    "latitude": row.latitude,
-                    "longitude": row.longitude,
-                    "operator": row.operator,
-                    "number_of_plugs": row.number_of_plugs,
-                    "charger_type": row.charger__type,
-                    "charging_speed": row.charging_speed,
-                    "power_kw": row.charger_rating_kw,
-                    "recommendation_tier": row.recommendation_tier,
-                    "recommendation_score": row.recommendation_score,
-                    "accessibility_score": row.accessibility_score,
-                    "nearby_hazards": row.nearby_hazards_count,
-                    "hazard_types": row.hazard_types if row.hazard_types else [],
-                    "postcode": row.pcode
+                    "address": station_address if station_address else "Address not available",
+                    "distance_km": round(distance_km, 2),
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "operator": operator,
+                    "number_of_plugs": number_of_plugs,
+                    "charger_type": charger_type_val,
+                    "charging_speed": charging_speed,
+                    "power_kw": power_kw,
+                    "recommendation_tier": recommendation_tier,
+                    "recommendation_score": recommendation_score,
+                    "accessibility_score": accessibility_score,
+                    "nearby_hazards": nearby_hazards,
+                    "hazard_types": hazard_types if hazard_types else [],
+                    "postcode": pcode
                 })
+            
+            cursor.close()
             
             insights["charging_stations"] = {
                 "stations_found": len(charging_stations),
@@ -184,12 +198,12 @@ def get_consumer_intelligence(
         except Exception as e:
             insights["charging_stations"] = {
                 "stations_found": 0,
-                "error": f"Table access error: {str(e)}",
+                "error": f"Query error: {str(e)}",
                 "message": "Could not retrieve charging station data"
             }
         
         # ========================================================================
-        # 2. Get fuel options (placeholder for future implementation)
+        # 2. Fuel options (placeholder)
         # ========================================================================
         insights["fuel_options"] = {
             "regions_found": 0,
@@ -198,7 +212,7 @@ def get_consumer_intelligence(
         }
         
         # ========================================================================
-        # 3. Get congestion forecast (placeholder for future implementation)
+        # 3. Congestion forecast (placeholder)
         # ========================================================================
         insights["congestion_forecast"] = {
             "nearby_risk_areas": [],
@@ -206,606 +220,291 @@ def get_consumer_intelligence(
         }
         
         # ========================================================================
-        # 4. Trip intelligence (if destination provided)
+        # 4. Trip intelligence (placeholder)
         # ========================================================================
-        if destination_lat and destination_lon:
-            trip_distance = haversine_distance(lat, lon, destination_lat, destination_lon)
-            
-            # Estimate charging needs (assuming 400km range)
-            charging_stops = max(0, int((trip_distance - 400) / 300))
-            
-            insights["trip_intelligence"] = {
-                "calculated_distance_km": round(trip_distance, 2),
-                "charging_requirements": {
-                    "charging_stops_needed": charging_stops,
-                    "total_trip_time_hours": round(trip_distance / 80, 1),
-                    "trip_feasibility": "Feasible" if trip_distance < 1000 else "Long distance - plan carefully",
-                    "recommended_charger_type": "Fast" if trip_distance > 100 else "Standard"
-                },
-                "route_summary": {
-                    "origin": {"lat": lat, "lon": lon},
-                    "destination": {"lat": destination_lat, "lon": destination_lon}
-                }
-            }
-        else:
-            insights["trip_intelligence"] = None
+        insights["trip_intelligence"] = None
         
         return {
             "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "location": {"lat": lat, "lon": lon, "postcode": postcode},
+            "timestamp": datetime.utcnow().isoformat(),
             "insights": insights
         }
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return {
             "status": "error",
-            "message": str(e),
-            "insights": {},
-            "traceback": traceback.format_exc()
+            "message": f"Intelligence query failed: {str(e)}",
+            "insights": {}
         }
+
 # ============================================================================
+# FLASK ROUTES
+# ============================================================================
+
+@app.route('/')
+def index():
+    """Main web interface"""
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/health')
+def health():
+    """Health check endpoint"""
+    conn = get_sql_connection()
+    return jsonify({
+        "status": "healthy",
+        "database_connected": conn is not None,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
+@app.route('/query', methods=['POST'])
+def query_intelligence():
+    """Main query endpoint for consumer intelligence"""
+    try:
+        data = request.get_json()
+        
+        # Extract parameters
+        lat = float(data.get('latitude'))
+        lon = float(data.get('longitude'))
+        postcode = data.get('postcode')
+        charger_type = data.get('charger_type')
+        fuel_type = data.get('fuel_type')
+        max_distance = float(data.get('max_distance_km', 30.0))
+        
+        # Optional trip parameters
+        dest_lat = data.get('destination_lat')
+        dest_lon = data.get('destination_lon')
+        if dest_lat: dest_lat = float(dest_lat)
+        if dest_lon: dest_lon = float(dest_lon)
+        
+        hour = data.get('hour_of_day')
+        if hour: hour = int(hour)
+        
+        # Get intelligence
+        result = get_consumer_intelligence(
+            lat=lat,
+            lon=lon,
+            postcode=postcode,
+            charger_type=charger_type,
+            fuel_type=fuel_type,
+            destination_lat=dest_lat,
+            destination_lon=dest_lon,
+            max_distance_km=max_distance,
+            hour_of_day=hour
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Request processing error: {str(e)}"
+        }), 400
+
+# ============================================================================
+# HTML TEMPLATE (same as before)
+# ============================================================================
+
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NSW EV Intelligence Platform</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-        
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
-        }
-        
-        .header {
             background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
             text-align: center;
-        }
-        
-        .header h1 {
-            color: #333;
-            font-size: 2.5em;
             margin-bottom: 10px;
+            font-size: 2.5em;
         }
-        
-        .header p {
+        .subtitle {
+            text-align: center;
             color: #666;
+            margin-bottom: 30px;
             font-size: 1.1em;
         }
-        
-        .content {
+        .form-grid {
             display: grid;
-            grid-template-columns: 400px 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
+            margin-bottom: 30px;
         }
-        
-        .input-panel {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            height: fit-content;
-            position: sticky;
-            top: 20px;
+        .form-group {
+            display: flex;
+            flex-direction: column;
         }
-        
-        .input-group {
-            margin-bottom: 20px;
-        }
-        
-        .input-group label {
-            display: block;
+        label {
             font-weight: 600;
-            color: #333;
             margin-bottom: 8px;
-            font-size: 0.9em;
+            color: #333;
         }
-        
-        .input-group input,
-        .input-group select {
-            width: 100%;
-            padding: 10px;
+        input, select {
+            padding: 12px;
             border: 2px solid #e0e0e0;
-            border-radius: 5px;
-            font-size: 1em;
-            transition: border-color 0.3s;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
         }
-        
-        .input-group input:focus,
-        .input-group select:focus {
+        input:focus, select:focus {
             outline: none;
             border-color: #667eea;
         }
-        
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .checkbox-group input[type="checkbox"] {
-            width: auto;
-            margin-right: 10px;
-        }
-        
-        .btn-primary {
-            width: 100%;
-            padding: 15px;
+        button {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            padding: 15px 40px;
             border: none;
-            border-radius: 5px;
-            font-size: 1.1em;
+            border-radius: 10px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: transform 0.2s;
         }
-        
-        .btn-primary:hover {
+        button:hover {
             transform: translateY(-2px);
         }
-        
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .results-panel {
-            background: white;
-            padding: 25px;
+        #results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
             border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            min-height: 500px;
+            display: none;
         }
-        
-        .loading {
-            text-align: center;
-            padding: 50px;
-            color: #666;
-        }
-        
-        .section {
-            margin-bottom: 30px;
-            padding-bottom: 30px;
-            border-bottom: 2px solid #f0f0f0;
-        }
-        
-        .section:last-child {
-            border-bottom: none;
-        }
-        
-        .section h3 {
-            color: #333;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .station-card,
-        .risk-card {
-            background: #f9f9f9;
+        .station-card {
+            background: white;
             padding: 15px;
+            margin: 10px 0;
             border-radius: 8px;
-            margin-bottom: 15px;
             border-left: 4px solid #667eea;
         }
-        
-        .station-card h4,
-        .risk-card h4 {
-            color: #333;
-            margin-bottom: 8px;
-        }
-        
-        .station-card p,
-        .risk-card p {
-            color: #666;
-            margin: 5px 0;
-            font-size: 0.9em;
-        }
-        
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 600;
-            margin-right: 8px;
-        }
-        
-        .badge-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .badge-warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .badge-danger {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .badge-info {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-        
-        .quick-locations {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        
-        .quick-locations h4 {
-            font-size: 0.9em;
-            color: #666;
-            margin-bottom: 10px;
-        }
-        
-        .location-btn {
-            display: block;
-            width: 100%;
-            padding: 8px;
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            text-align: left;
-            font-size: 0.85em;
-            transition: background 0.2s;
-        }
-        
-        .location-btn:hover {
-            background: #f0f0f0;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        
-        @media (max-width: 1024px) {
-            .content {
-                grid-template-columns: 1fr;
-            }
-            
-            .input-panel {
-                position: static;
-            }
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-size: 18px;
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>⚡ NSW EV Intelligence Platform</h1>
-            <p>Real-time location intelligence for EV drivers</p>
+        <h1>⚡ NSW EV Intelligence Platform</h1>
+        <p class="subtitle">Find charging stations, fuel options, and traffic insights</p>
+        
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Latitude</label>
+                <input type="number" id="lat" step="0.0001" value="-33.8688" placeholder="-33.8688">
+            </div>
+            <div class="form-group">
+                <label>Longitude</label>
+                <input type="number" id="lon" step="0.0001" value="151.2093" placeholder="151.2093">
+            </div>
+            <div class="form-group">
+                <label>Max Distance (km)</label>
+                <input type="number" id="distance" value="30" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <label>Charger Type (Optional)</label>
+                <select id="charger_type">
+                    <option value="">All Types</option>
+                    <option value="Type 2">Type 2</option>
+                    <option value="CCS">CCS</option>
+                    <option value="CHAdeMO">CHAdeMO</option>
+                </select>
+            </div>
         </div>
         
-        <div class="content">
-            <div class="input-panel">
-                <h2 style="margin-bottom: 20px; color: #333;">📍 Your Location</h2>
-                
-                <div class="quick-locations">
-                    <h4>Quick Select:</h4>
-                    <button class="location-btn" onclick="setLocation(-33.8688, 151.2093, '2000')">Sydney CBD</button>
-                    <button class="location-btn" onclick="setLocation(-32.9283, 151.7817, '2300')">Newcastle</button>
-                    <button class="location-btn" onclick="setLocation(-34.4278, 150.8931, '2500')">Wollongong</button>
-                    <button class="location-btn" onclick="setLocation(-33.8151, 151.0003, '2150')">Parramatta</button>
-                </div>
-                
-                <div class="input-group">
-                    <label>Latitude</label>
-                    <input type="number" id="lat" value="-33.8688" step="0.0001" required>
-                </div>
-                
-                <div class="input-group">
-                    <label>Longitude</label>
-                    <input type="number" id="lon" value="151.2093" step="0.0001" required>
-                </div>
-                
-                <div class="input-group">
-                    <label>Postcode (Optional)</label>
-                    <input type="text" id="postcode" value="2000" placeholder="e.g., 2000">
-                </div>
-                
-                <div class="input-group">
-                    <label>Search Radius (km)</label>
-                    <input type="number" id="radius" value="20" min="5" max="100" step="5">
-                </div>
-                
-                <div class="input-group">
-                    <label>Charger Type</label>
-                    <select id="charger_type">
-                        <option value="">All Types</option>
-                        <option value="Slow">Slow</option>
-                        <option value="Fast">Fast</option>
-                        <option value="Rapid">Rapid</option>
-                        <option value="Ultra-Rapid">Ultra-Rapid</option>
-                    </select>
-                </div>
-                
-                <div class="input-group">
-                    <label>Fuel Type</label>
-                    <select id="fuel_type">
-                        <option value="">All Types</option>
-                        <option value="unleaded">Unleaded</option>
-                        <option value="diesel">Diesel</option>
-                        <option value="lpg">LPG</option>
-                    </select>
-                </div>
-                
-                <div class="input-group">
-                    <label>Hour of Day (for congestion)</label>
-                    <input type="number" id="hour" value="8" min="0" max="23">
-                </div>
-                
-                <div class="checkbox-group">
-                    <input type="checkbox" id="enable_trip" onchange="toggleTrip()">
-                    <label>Enable Trip Planning</label>
-                </div>
-                
-                <div id="trip-inputs" style="display: none;">
-                    <div class="input-group">
-                        <label>Destination Latitude</label>
-                        <input type="number" id="dest_lat" value="-32.9283" step="0.0001">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label>Destination Longitude</label>
-                        <input type="number" id="dest_lon" value="151.7817" step="0.0001">
-                    </div>
-                </div>
-                
-                <button class="btn-primary" onclick="getIntelligence()" id="queryBtn">
-                    🔍 Get Intelligence
-                </button>
-            </div>
-            
-            <div class="results-panel" id="results">
-                <div class="loading">
-                    <h2 style="color: #999;">👋 Welcome!</h2>
-                    <p>Enter your location and click "Get Intelligence" to start</p>
-                </div>
-            </div>
+        <div style="text-align: center;">
+            <button onclick="queryIntelligence()">🔍 Get Intelligence</button>
         </div>
+        
+        <div class="loading" id="loading">⏳ Querying database...</div>
+        <div id="results"></div>
     </div>
     
     <script>
-        function toggleTrip() {
-            const checkbox = document.getElementById('enable_trip');
-            const inputs = document.getElementById('trip-inputs');
-            inputs.style.display = checkbox.checked ? 'block' : 'none';
-        }
-        
-        function setLocation(lat, lon, postcode) {
-            document.getElementById('lat').value = lat;
-            document.getElementById('lon').value = lon;
-            document.getElementById('postcode').value = postcode;
-        }
-        
-        async function getIntelligence() {
-            const btn = document.getElementById('queryBtn');
+        async function queryIntelligence() {
+            const loading = document.getElementById('loading');
             const results = document.getElementById('results');
             
-            // Disable button
-            btn.disabled = true;
-            btn.textContent = '⏳ Processing...';
-            
-            // Show loading
-            results.innerHTML = '<div class="loading"><h2>Processing your request...</h2></div>';
-            
-            // Gather inputs
-            const data = {
-                lat: parseFloat(document.getElementById('lat').value),
-                lon: parseFloat(document.getElementById('lon').value),
-                postcode: document.getElementById('postcode').value,
-                charger_type: document.getElementById('charger_type').value || null,
-                fuel_type: document.getElementById('fuel_type').value || null,
-                max_distance_km: parseFloat(document.getElementById('radius').value),
-                hour_of_day: parseInt(document.getElementById('hour').value)
-            };
-            
-            // Add trip data if enabled
-            if (document.getElementById('enable_trip').checked) {
-                data.destination_lat = parseFloat(document.getElementById('dest_lat').value);
-                data.destination_lon = parseFloat(document.getElementById('dest_lon').value);
-            }
+            loading.style.display = 'block';
+            results.style.display = 'none';
             
             try {
                 const response = await fetch('/query', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        latitude: document.getElementById('lat').value,
+                        longitude: document.getElementById('lon').value,
+                        max_distance_km: document.getElementById('distance').value,
+                        charger_type: document.getElementById('charger_type').value
+                    })
                 });
                 
-                const result = await response.json();
+                const data = await response.json();
+                displayResults(data);
                 
-                if (response.ok) {
-                    displayResults(result);
-                } else {
-                    results.innerHTML = `<div class="error"><strong>Error:</strong> ${result.error}</div>`;
-                }
             } catch (error) {
-                results.innerHTML = `<div class="error"><strong>Error:</strong> ${error.message}</div>`;
+                results.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                results.style.display = 'block';
             } finally {
-                btn.disabled = false;
-                btn.textContent = '🔍 Get Intelligence';
+                loading.style.display = 'none';
             }
         }
         
         function displayResults(data) {
             const results = document.getElementById('results');
-            let html = '';
             
-            // Charging Stations
-            if (data.insights.charging_stations && data.insights.charging_stations.stations_found > 0) {
-                html += '<div class="section">';
-                html += '<h3>⚡ Charging Stations (' + data.insights.charging_stations.stations_found + ' found)</h3>';
-                
-                data.insights.charging_stations.charging_stations.slice(0, 5).forEach(station => {
-                    html += '<div class="station-card">';
-                    html += '<h4>' + (station.name || 'Unknown Station') + '</h4>';
-                    html += '<p>' + (station.address || 'Address not available') + '</p>';
-                    html += '<p><strong>Distance:</strong> ' + station.distance_km + ' km | ';
-                    html += '<strong>Type:</strong> ' + station.charging_speed + ' | ';
-                    html += '<strong>Power:</strong> ' + station.power_kw + ' kW</p>';
-                    html += '<span class="badge badge-info">' + station.recommendation_tier + '</span>';
-                    html += '</div>';
+            if (data.status === 'error') {
+                results.innerHTML = `<p style="color: red;">${data.message}</p>`;
+                results.style.display = 'block';
+                return;
+            }
+            
+            let html = '<h2>📍 Charging Stations Nearby</h2>';
+            
+            const stations = data.insights.charging_stations?.charging_stations || [];
+            
+            if (stations.length === 0) {
+                html += '<p>No charging stations found in this area.</p>';
+            } else {
+                stations.forEach(station => {
+                    html += `
+                        <div class="station-card">
+                            <h3>${station.name}</h3>
+                            <p><strong>📍 ${station.distance_km} km away</strong></p>
+                            <p>${station.address}</p>
+                            <p>⚡ ${station.charger_type} | ${station.charging_speed} | ${station.power_kw} kW</p>
+                            <p>🔌 ${station.number_of_plugs} plugs | Operator: ${station.operator || 'Unknown'}</p>
+                            <p>⭐ Score: ${station.recommendation_score || 'N/A'} | Tier: ${station.recommendation_tier || 'N/A'}</p>
+                        </div>
+                    `;
                 });
-                
-                html += '</div>';
             }
             
-            // Fuel Options
-            if (data.insights.fuel_options && data.insights.fuel_options.regions_found > 0) {
-                html += '<div class="section">';
-                html += '<h3>⛽ Fuel Prices by Region</h3>';
-                
-                data.insights.fuel_options.fuel_recommendations.slice(0, 3).forEach(region => {
-                    html += '<div class="station-card">';
-                    html += '<h4>' + region.region + '</h4>';
-                    region.fuel_options.forEach(fuel => {
-                        html += '<p>' + fuel.fuel_type + ': <strong>$' + fuel.avg_price_per_liter.toFixed(2) + '/L</strong> ';
-                        html += '(' + fuel.stations_available + ' stations)</p>';
-                    });
-                    html += '</div>';
-                });
-                
-                html += '</div>';
-            }
-            
-            // Congestion
-            if (data.insights.congestion_forecast && data.insights.congestion_forecast.nearby_risk_areas.length > 0) {
-                html += '<div class="section">';
-                html += '<h3>🚦 Congestion Risk Areas</h3>';
-                
-                data.insights.congestion_forecast.nearby_risk_areas.slice(0, 5).forEach(area => {
-                    html += '<div class="risk-card">';
-                    html += '<h4>' + area.location + ' (' + area.distance_km + ' km)</h4>';
-                    
-                    let badgeClass = 'badge-info';
-                    if (area.risk_level === 'High' || area.risk_level === 'Critical') badgeClass = 'badge-danger';
-                    else if (area.risk_level === 'Moderate') badgeClass = 'badge-warning';
-                    else badgeClass = 'badge-success';
-                    
-                    html += '<span class="badge ' + badgeClass + '">' + area.risk_level + ' Risk</span>';
-                    html += '<p><strong>Active Hazards:</strong> ' + area.active_hazards + '</p>';
-                    html += '</div>';
-                });
-                
-                html += '</div>';
-            }
-            
-            // Trip Intelligence
-            if (data.insights.trip_intelligence) {
-                const ti = data.insights.trip_intelligence;
-                html += '<div class="section">';
-                html += '<h3>🚗 Trip Intelligence</h3>';
-                
-                if (ti.calculated_distance_km) {
-                    html += '<p><strong>Trip Distance:</strong> ' + ti.calculated_distance_km + ' km</p>';
-                }
-                
-                if (ti.charging_requirements) {
-                    const cr = ti.charging_requirements;
-                    html += '<div class="station-card">';
-                    html += '<h4>Charging Requirements</h4>';
-                    html += '<p><strong>Stops Needed:</strong> ' + cr.charging_stops_needed + '</p>';
-                    html += '<p><strong>Total Trip Time:</strong> ' + cr.total_trip_time_hours.toFixed(1) + ' hours</p>';
-                    html += '<p><strong>Feasibility:</strong> ' + cr.trip_feasibility + '</p>';
-                    html += '<p><strong>Recommended Charger:</strong> ' + cr.recommended_charger_type + '</p>';
-                    html += '</div>';
-                }
-                
-                html += '</div>';
-            }
-            
-            results.innerHTML = html || '<div class="loading"><p>No results found</p></div>';
+            results.innerHTML = html;
+            results.style.display = 'block';
         }
     </script>
 </body>
 </html>
 '''
 
-# ============================================================================
-# ROUTES
-# ============================================================================
-
-@app.route('/')
-def home():
-    """Serve the main web interface"""
-    return render_template_string(HTML_TEMPLATE)
-
-@app.route('/health')
-def health():
-    """Health check endpoint"""
-    spark_status = "available" if get_spark() else "unavailable"
-    return jsonify({
-        "status": "healthy",
-        "service": "NSW EV Intelligence Platform",
-        "spark": spark_status
-    })
-
-@app.route('/query', methods=['POST'])
-def query():
-    """Handle intelligence queries from the web interface"""
-    try:
-        data = request.get_json()
-        
-        if 'lat' not in data or 'lon' not in data:
-            return jsonify({"error": "Missing required parameters: lat, lon"}), 400
-        
-        result = get_consumer_intelligence(
-            lat=float(data['lat']),
-            lon=float(data['lon']),
-            postcode=data.get('postcode'),
-            charger_type=data.get('charger_type'),
-            fuel_type=data.get('fuel_type'),
-            destination_lat=float(data['destination_lat']) if data.get('destination_lat') else None,
-            destination_lon=float(data['destination_lon']) if data.get('destination_lon') else None,
-            max_distance_km=float(data.get('max_distance_km', 30.0)),
-            hour_of_day=int(data['hour_of_day']) if data.get('hour_of_day') is not None else None
-        )
-        
-        return jsonify(result), 200
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
 if __name__ == '__main__':
-    import os
-    port = int(os.environ.get('DATABRICKS_APP_PORT', 8000))
-    print(f"Starting NSW EV Intelligence Platform on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=8000, debug=False)
