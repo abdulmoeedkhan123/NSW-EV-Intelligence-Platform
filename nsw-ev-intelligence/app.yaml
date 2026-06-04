@@ -2,6 +2,11 @@ command:
   - python
   - app.py
 
+resources:
+  - name: warehouse
+    sql-warehouse:
+      id: 35a820df41c9ad96
+
 env:
   - name: DATABRICKS_HTTP_PATH
     value: /sql/1.0/warehouses/35a820df41c9ad96
