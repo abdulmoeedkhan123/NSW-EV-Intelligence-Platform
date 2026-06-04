@@ -426,8 +426,9 @@ HTML_TEMPLATE = '''
                 <label>Charger Type</label>
                 <select id="charger_type">
                     <option value="">All Types</option>
-                    <option value="Type 2">Type 2</option>
-                    <option value="CCS">CCS</option>
+                    <option value="AC">AC (Standard)</option>
+                    <option value="DC">DC (Fast)</option>
+                    <option value="Upcoming">Upcoming</option>
                 </select>
             </div>
         </div>
