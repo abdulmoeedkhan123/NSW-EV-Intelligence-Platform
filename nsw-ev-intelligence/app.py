@@ -17,6 +17,15 @@ from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
 app = Flask(__name__)
 
 # ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+# RAG Configuration
+INDEX_NAME = "mobility_ai.rag.ev_documents_index"
+LLM_ENDPOINT = "databricks-meta-llama-3-3-70b-instruct"
+TOP_K = 5
+
+# ============================================================================
 # DATABRICKS SQL CONNECTION (replaces Spark)
 # ============================================================================
 
@@ -73,11 +82,6 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 # ============================================================================
 # RAG CHAT FUNCTIONALITY
 # ============================================================================
-
-# RAG Configuration
-INDEX_NAME = "mobility_ai.rag.ev_documents_index"
-LLM_ENDPOINT = "databricks-meta-llama-3-3-70b-instruct"
-TOP_K = 5
 
 # Initialize Databricks SDK client for RAG
 _workspace_client = None
