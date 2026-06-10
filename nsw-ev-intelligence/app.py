@@ -10,6 +10,10 @@ from typing import Dict, Optional, List
 import json
 import os
 
+# RAG imports
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
+
 app = Flask(__name__)
 
 # ============================================================================
@@ -65,6 +69,119 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
     c = 2 * asin(sqrt(a)) 
     return c * 6371
+
+# ============================================================================
+# RAG CHAT FUNCTIONALITY
+# ============================================================================
+
+# RAG Configuration
+INDEX_NAME = "mobility_ai.rag.ev_documents_index"
+LLM_ENDPOINT = "databricks-meta-llama-3-3-70b-instruct"
+TOP_K = 5
+
+# Initialize Databricks SDK client for RAG
+_workspace_client = None
+
+def get_workspace_client():
+    """Get or create Databricks Workspace client for RAG"""
+    global _workspace_client
+    if _workspace_client is None:
+        try:
+            _workspace_client = WorkspaceClient()
+            print("✓ Databricks Workspace client initialized for RAG")
+        except Exception as e:
+            print(f"⚠ Workspace client initialization failed: {e}")
+            return None
+    return _workspace_client
+
+def retrieve_relevant_documents(query: str, top_k: int = TOP_K):
+    """Retrieve relevant documents from vector search index."""
+    w = get_workspace_client()
+    if w is None:
+        return []
+    
+    try:
+        results = w.vector_search_indexes.query_index(
+            index_name=INDEX_NAME,
+            columns=["doc_id", "content", "source_table"],
+            query_text=query,
+            num_results=top_k
+        )
+        
+        documents = []
+        if results.result and results.result.data_array:
+            for row in results.result.data_array:
+                documents.append({
+                    "doc_id": row[0],
+                    "content": row[1],
+                    "source_table": row[2],
+                    "score": float(row[-1])
+                })
+        return documents
+    except Exception as e:
+        print(f"Error retrieving documents: {e}")
+        return []
+
+def generate_response(prompt: str, max_tokens: int = 500):
+    """Generate response using Databricks Foundation Models."""
+    w = get_workspace_client()
+    if w is None:
+        return "RAG service is currently unavailable."
+    
+    try:
+        messages = [
+            ChatMessage(
+                role=ChatMessageRole.SYSTEM,
+                content="You are a helpful assistant for the NSW EV Intelligence Platform."
+            ),
+            ChatMessage(role=ChatMessageRole.USER, content=prompt)
+        ]
+        
+        response = w.serving_endpoints.query(
+            name=LLM_ENDPOINT,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=0.3
+        )
+        
+        if response.choices and len(response.choices) > 0:
+            return response.choices[0].message.content
+        return "I'm sorry, I couldn't generate a response."
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def create_rag_prompt(question: str, documents: list) -> str:
+    """Create RAG prompt combining question with retrieved documents."""
+    if not documents:
+        return f"""I don't have relevant information. Please ask about:
+- EV charging stations in NSW
+- Route safety and traffic hazards
+
+Question: {question}"""
+    
+    context_parts = [f"Document {i} (Score: {doc['score']:.3f}):\n{doc['content']}"
+                     for i, doc in enumerate(documents, 1)]
+    context = "\n\n".join(context_parts)
+    
+    return f"""You are an AI assistant for the NSW EV Intelligence Platform. Answer based ONLY on the context below.
+
+CONTEXT:
+{context}
+
+QUESTION: {question}
+
+ANSWER:"""
+
+def rag_pipeline(question: str, top_k: int = TOP_K):
+    """Complete RAG pipeline: Retrieve → Prompt → Generate."""
+    documents = retrieve_relevant_documents(question, top_k=top_k)
+    prompt = create_rag_prompt(question, documents)
+    answer = generate_response(prompt)
+    
+    sources = [{"id": doc["doc_id"], "score": doc["score"]}
+               for doc in documents]
+    
+    return {"answer": answer, "sources": sources, "retrieved_docs": documents}
 
 # ============================================================================
 # INTELLIGENCE FUNCTIONS USING SQL
@@ -306,6 +423,36 @@ def query_intelligence():
             "message": f"Request processing error: {str(e)}"
         }), 400
 
+@app.route('/chat', methods=['POST'])
+def chat():
+    """RAG chat endpoint for natural language queries"""
+    try:
+        data = request.get_json()
+        question = data.get('question', '').strip()
+        
+        if not question:
+            return jsonify({
+                "status": "error",
+                "message": "Question is required"
+            }), 400
+        
+        # Run RAG pipeline
+        result = rag_pipeline(question, top_k=5)
+        
+        return jsonify({
+            "status": "success",
+            "answer": result['answer'],
+            "sources": result['sources'][:3],  # Return top 3 sources
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        print(f"Error in /chat endpoint: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Chat processing error: {str(e)}"
+        }), 500
+
 # ============================================================================
 # HTML TEMPLATE - FIXED TO SHOW ERRORS
 # ============================================================================
@@ -343,6 +490,33 @@ HTML_TEMPLATE = '''
             color: #666;
             margin-bottom: 30px;
             font-size: 1.1em;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
         }
         .form-grid {
             display: grid;
@@ -402,13 +576,87 @@ HTML_TEMPLATE = '''
             color: #667eea;
             display: none;
         }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .chat-messages {
+            min-height: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .message.user {
+            align-self: flex-end;
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+        }
+        .message.assistant {
+            align-self: flex-start;
+            background: white;
+            border: 1px solid #e0e0e0;
+        }
+        .message .sources {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            font-size: 0.85em;
+        }
+        .chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .example-questions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .example-btn {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: 1px solid #d0d0d0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .example-btn:hover {
+            background: #e0e0e0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>⚡ NSW EV Intelligence Platform</h1>
-        <p class="subtitle">Find charging stations near you</p>
+        <p class="subtitle">Find charging stations and get AI-powered insights</p>
         
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('stations')">🔍 Find Stations</button>
+            <button class="tab" onclick="switchTab('chat')">💬 Ask AI Chat</button>
+        </div>
+        
+        <div id="stations-tab" class="tab-content active">
         <div class="form-grid">
             <div class="form-group">
                 <label>Latitude</label>
@@ -439,6 +687,36 @@ HTML_TEMPLATE = '''
         
         <div class="loading" id="loading">⏳ Querying database...</div>
         <div id="results"></div>
+        </div>
+        
+        <div id="chat-tab" class="tab-content">
+            <div class="chat-container">
+                <div class="example-questions">
+                    <button class="example-btn" onclick="askExample('Where can I find fast charging stations near Sydney CBD?')">Fast charging near Sydney</button>
+                    <button class="example-btn" onclick="askExample('What\'s the charging speed at Tesla supercharger stations?')">Tesla supercharger info</button>
+                    <button class="example-btn" onclick="askExample('Are there any routes with safety hazards or delays?')">Route safety</button>
+                    <button class="example-btn" onclick="askExample('Find me charging stations operated by NRMA')">NRMA stations</button>
+                </div>
+                
+                <div class="chat-messages" id="chat-messages">
+                    <div class="message assistant">
+                        <strong>🚗⚡ AI Assistant</strong>
+                        <p>Hello! I'm your NSW EV Intelligence assistant. Ask me anything about:</p>
+                        <ul>
+                            <li>EV charging stations (locations, operators, speeds)</li>
+                            <li>Route safety and traffic hazards</li>
+                            <li>Trip planning with charging stops</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="chat-input-container">
+                    <input type="text" id="chat-input" class="chat-input" placeholder="Ask a question about NSW EV infrastructure..." onkeypress="if(event.key==='Enter') sendMessage()">
+                    <button onclick="sendMessage()">💬 Send</button>
+                    <button onclick="clearChat()" style="background: #e0e0e0; color: #666;">🗑️ Clear</button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script>
@@ -524,6 +802,97 @@ HTML_TEMPLATE = '''
             
             results.innerHTML = html;
             results.style.display = 'block';
+        }
+        
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        // Chat functions
+        function addMessage(role, content, sources = null) {
+            const messagesDiv = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            let html = `<strong>${role === 'user' ? 'You' : '🚗⚡ AI Assistant'}</strong>`;
+            html += `<p>${content.replace(/\n/g, '<br>')}</p>`;
+            
+            if (sources && sources.length > 0) {
+                html += '<div class="sources"><strong>📚 Sources:</strong><br>';
+                sources.forEach((source, i) => {
+                    html += `${i + 1}. ${source.id} (relevance: ${source.score.toFixed(2)})<br>`;
+                });
+                html += '</div>';
+            }
+            
+            messageDiv.innerHTML = html;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const question = input.value.trim();
+            
+            if (!question) return;
+            
+            // Add user message
+            addMessage('user', question);
+            input.value = '';
+            
+            // Add loading indicator
+            addMessage('assistant', '⏳ Thinking...');
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ question })
+                });
+                
+                // Remove loading message
+                const messagesDiv = document.getElementById('chat-messages');
+                messagesDiv.removeChild(messagesDiv.lastChild);
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    addMessage('assistant', data.answer, data.sources);
+                } else {
+                    addMessage('assistant', `Error: ${data.message}`);
+                }
+            } catch (error) {
+                // Remove loading message
+                const messagesDiv = document.getElementById('chat-messages');
+                messagesDiv.removeChild(messagesDiv.lastChild);
+                addMessage('assistant', `Error: ${error.message}`);
+            }
+        }
+        
+        function askExample(question) {
+            document.getElementById('chat-input').value = question;
+            sendMessage();
+        }
+        
+        function clearChat() {
+            const messagesDiv = document.getElementById('chat-messages');
+            messagesDiv.innerHTML = `
+                <div class="message assistant">
+                    <strong>🚗⚡ AI Assistant</strong>
+                    <p>Chat cleared! Ask me anything about NSW EV infrastructure.</p>
+                </div>
+            `;
         }
     </script>
 </body>

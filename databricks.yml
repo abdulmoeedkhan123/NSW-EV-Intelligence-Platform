@@ -70,6 +70,24 @@ resources:
       name: "nsw-ev-platform-${bundle.target}"
       description: "NSW EV Intelligence Platform - Real-time dashboards for EV infrastructure, traffic forecasting, and trip planning"
       source_code_path: "${workspace.file_path}/nsw-ev-intelligence/ui"
+    
+    rag_chat_app:
+      name: "nsw-ev-rag-chat-${bundle.target}"
+      description: "RAG-powered chat interface for NSW EV Intelligence queries"
+      resources:
+        - name: main
+          description: "Main RAG chat application"
+          python:
+            src: ${workspace.file_path}/rag_app.py
+            handler: app
+      config:
+        env:
+          - name: INDEX_NAME
+            value: mobility_ai.rag.ev_documents_index
+          - name: LLM_ENDPOINT
+            value: databricks-meta-llama-3-3-70b-instruct
+          - name: TOP_K
+            value: "5"
   
   pipelines:
     bronze_ingestion:
