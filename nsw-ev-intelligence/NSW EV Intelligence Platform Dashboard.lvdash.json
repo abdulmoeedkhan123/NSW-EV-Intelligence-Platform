@@ -301,7 +301,7 @@
           },
           "position": {
             "x": 0,
-            "y": 3,
+            "y": 8,
             "width": 6,
             "height": 5
           }
@@ -353,9 +353,112 @@
           },
           "position": {
             "x": 6,
-            "y": 3,
+            "y": 8,
             "width": 6,
             "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "74ed3ce9",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "latitude",
+                      "expression": "`latitude`"
+                    },
+                    {
+                      "name": "longitude",
+                      "expression": "`longitude`"
+                    },
+                    {
+                      "name": "total_plugs",
+                      "expression": "`total_plugs`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "title": "EV Stations - Plugs per Location",
+                "showTitle": true
+              },
+              "version": 2,
+              "widgetType": "symbol-map",
+              "encodings": {
+                "coordinates": {
+                  "latitude": {
+                    "fieldName": "latitude"
+                  },
+                  "longitude": {
+                    "fieldName": "longitude"
+                  }
+                },
+                "size": {
+                  "fieldName": "total_plugs",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 12,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "2c49975a",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "regional_metrics",
+                  "fields": [
+                    {
+                      "name": "avg(avg_diesel_price)",
+                      "expression": "AVG(`avg_diesel_price`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Avg Diesel Price",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_diesel_price)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
           }
         }
       ],
@@ -380,11 +483,11 @@
                       "expression": "`charging_speed`"
                     },
                     {
-                      "name": "number_of_plugs",
-                      "expression": "`number_of_plugs`"
+                      "name": "sum(total_plugs)",
+                      "expression": "SUM(`total_plugs`)"
                     }
                   ],
-                  "disaggregated": true
+                  "disaggregated": false
                 }
               }
             ],
@@ -403,17 +506,20 @@
                   }
                 },
                 "y": {
-                  "fieldName": "number_of_plugs",
+                  "fieldName": "sum(total_plugs)",
                   "scale": {
                     "type": "quantitative"
                   }
                 }
+              },
+              "data": {
+                "queryName": "main_query"
               }
             }
           },
           "position": {
             "x": 0,
-            "y": 0,
+            "y": 5,
             "width": 6,
             "height": 5
           }
@@ -453,8 +559,577 @@
           "position": {
             "x": 6,
             "y": 0,
-            "width": 3,
+            "width": 2,
             "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "total_chargers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "countdistinct(station_id)",
+                      "expression": "COUNT(DISTINCT `station_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Charging Stations",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "countdistinct(station_id)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "avg_recommendation_score",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "avg(recommendation_score)",
+                      "expression": "AVG(`recommendation_score`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Avg Recommendation Score",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(recommendation_score)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 10,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "total_plugs",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "sum(total_plugs)",
+                      "expression": "SUM(`total_plugs`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Available Plugs",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_plugs)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "recommendations_by_tier",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "recommendation_tier",
+                      "expression": "`recommendation_tier`"
+                    },
+                    {
+                      "name": "countdistinct(station_id)",
+                      "expression": "COUNT(DISTINCT `station_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Chargers by Recommendation Tier",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "recommendation_tier",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "countdistinct(station_id)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "capacity_by_speed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "charging_speed",
+                      "expression": "`charging_speed`"
+                    },
+                    {
+                      "name": "sum(charger_rating_kw)",
+                      "expression": "SUM(`charger_rating_kw`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Total Capacity by Charging Speed",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "charging_speed",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(charger_rating_kw)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 5,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "top_lga_chargers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "lganame",
+                      "expression": "`lganame`"
+                    },
+                    {
+                      "name": "countdistinct(station_id)",
+                      "expression": "COUNT(DISTINCT `station_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Top 10 LGAs by Charger Count",
+                "showTitle": true,
+                "showDescription": false
+              },
+              "widgetType": "area",
+              "encodings": {
+                "x": {
+                  "fieldName": "lganame",
+                  "displayName": "Council ",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "countdistinct(station_id)",
+                  "displayName": "Stations",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 10,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "gap_severity_map",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_gaps",
+                  "fields": [
+                    {
+                      "name": "gap_category",
+                      "expression": "`gap_category`"
+                    },
+                    {
+                      "name": "center_lat",
+                      "expression": "`center_lat`"
+                    },
+                    {
+                      "name": "center_lon",
+                      "expression": "`center_lon`"
+                    },
+                    {
+                      "name": "gap_severity_score",
+                      "expression": "`gap_severity_score`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Infrastructure Gap Severity",
+                "showTitle": true
+              },
+              "widgetType": "symbol-map",
+              "encodings": {
+                "coordinates": {
+                  "latitude": {
+                    "fieldName": "center_lat"
+                  },
+                  "longitude": {
+                    "fieldName": "center_lon"
+                  }
+                },
+                "color": {
+                  "fieldName": "gap_category",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "size": {
+                  "fieldName": "gap_severity_score",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 16,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "top_recommendations_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "station_address",
+                      "expression": "`station_address`"
+                    },
+                    {
+                      "name": "Company",
+                      "expression": "`Company`"
+                    },
+                    {
+                      "name": "charging_speed",
+                      "expression": "`charging_speed`"
+                    },
+                    {
+                      "name": "total_plugs",
+                      "expression": "`total_plugs`"
+                    },
+                    {
+                      "name": "recommendation_score",
+                      "expression": "`recommendation_score`"
+                    },
+                    {
+                      "name": "recommendation_tier",
+                      "expression": "`recommendation_tier`"
+                    },
+                    {
+                      "name": "lganame",
+                      "expression": "`lganame`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Top Recommended Stations",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "station_address"
+                  },
+                  {
+                    "fieldName": "Company"
+                  },
+                  {
+                    "fieldName": "charging_speed"
+                  },
+                  {
+                    "fieldName": "total_plugs",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "recommendation_score",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "none"
+                    }
+                  },
+                  {
+                    "fieldName": "recommendation_tier"
+                  },
+                  {
+                    "fieldName": "lganame"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 22,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "accessibility_distribution",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "accessibility_score",
+                      "expression": "`accessibility_score`"
+                    },
+                    {
+                      "name": "countdistinct(station_id)",
+                      "expression": "COUNT(DISTINCT `station_id`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Accessibility Score Distribution",
+                "showTitle": true
+              },
+              "widgetType": "histogram",
+              "encodings": {
+                "x": {
+                  "fieldName": "accessibility_score",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "countdistinct(station_id)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 28,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "chargers_by_company",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "charger_smart",
+                  "fields": [
+                    {
+                      "name": "countdistinct(station_id)",
+                      "expression": "COUNT(DISTINCT `station_id`)"
+                    },
+                    {
+                      "name": "Company",
+                      "expression": "`Company`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "title": "Charger Distribution by Provider",
+                "showTitle": true
+              },
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "countdistinct(station_id)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "Company",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 28,
+            "width": 6,
+            "height": 5
           }
         }
       ],
