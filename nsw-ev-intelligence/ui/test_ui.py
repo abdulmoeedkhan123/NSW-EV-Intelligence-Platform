@@ -7,6 +7,8 @@ Tests all components without starting the Streamlit server
 import sys
 import os
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 print("🧪 NSW EV Intelligence Platform - UI Test")
 print("="*70)
 
@@ -86,6 +88,7 @@ if syntax_ok:
 
 # Test 4: Check Databricks connectivity (if available)
 print("\n4️⃣  Testing Databricks Connectivity...")
+database_status = "Not available"
 try:
     from pyspark.sql import SparkSession
     spark = SparkSession.builder.getOrCreate()
@@ -120,10 +123,12 @@ try:
             print(f"   ⚠️  Table {table}: {str(e)[:50]}")
     
     print(f"   ✅ Total records across all tables: {total}")
+    database_status = "Connected"
     
 except Exception as e:
     print(f"   ⚠️  Database connection not available: {str(e)[:80]}")
     print(f"   ℹ️  This is OK for local development - app will show empty states")
+    database_status = "Unavailable"
 
 # Test 5: Configuration validation
 print("\n5️⃣  Testing Configuration Files...")
@@ -151,7 +156,7 @@ print("\n📊 Test Summary:")
 print("   ✅ File structure: OK")
 print("   ✅ Python syntax: OK") 
 print("   ✅ Dependencies: OK")
-print("   ℹ️  Database: " + ("Connected" if total > 0 else "Not tested"))
+print("   ℹ️  Database: " + database_status)
 
 print("\n🎉 UI Application is ready to run!")
 print("\n📝 To start the application:")
