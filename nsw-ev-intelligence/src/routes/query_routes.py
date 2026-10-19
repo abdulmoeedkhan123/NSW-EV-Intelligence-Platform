@@ -24,11 +24,31 @@ def query_intelligence():
         JSON response with charging stations and intelligence insights
     """
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({
+                "status": "error",
+                "message": "Request body must be a JSON object"
+            }), 400
+
+        missing_parameters = [
+            name for name in ("latitude", "longitude")
+            if data.get(name) is None
+        ]
+        if missing_parameters:
+            return jsonify({
+                "status": "error",
+                "message": f"Missing required parameter: {missing_parameters[0]}"
+            }), 400
         
         # Extract and validate required parameters
-        lat = float(data.get('latitude'))
-        lon = float(data.get('longitude'))
+        lat = float(data["latitude"])
+        lon = float(data["longitude"])
+        if not -90 <= lat <= 90 or not -180 <= lon <= 180:
+            return jsonify({
+                "status": "error",
+                "message": "Latitude or longitude is outside the valid range"
+            }), 400
         
         # Extract optional parameters
         postcode = data.get('postcode')
@@ -39,11 +59,11 @@ def query_intelligence():
         # Optional trip parameters
         dest_lat = data.get('destination_lat')
         dest_lon = data.get('destination_lon')
-        if dest_lat: dest_lat = float(dest_lat)
-        if dest_lon: dest_lon = float(dest_lon)
+        if dest_lat is not None: dest_lat = float(dest_lat)
+        if dest_lon is not None: dest_lon = float(dest_lon)
         
         hour = data.get('hour_of_day')
-        if hour: hour = int(hour)
+        if hour is not None: hour = int(hour)
         
         # Get intelligence
         result = get_consumer_intelligence(
@@ -60,7 +80,7 @@ def query_intelligence():
         
         return jsonify(result)
         
-    except ValueError as e:
+    except (TypeError, ValueError) as e:
         return jsonify({
             "status": "error",
             "message": f"Invalid parameter format: {str(e)}"

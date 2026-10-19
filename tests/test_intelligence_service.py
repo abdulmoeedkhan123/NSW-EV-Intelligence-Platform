@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 from types import ModuleType
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -17,6 +18,23 @@ if "databricks" not in sys.modules:
     sys.modules["databricks.sql"] = databricks_sql_module
 
 from src.services import intelligence_service
+
+
+class FakeBlueprint:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def route(self, *args, **kwargs):
+        return lambda handler: handler
+
+
+flask_module = ModuleType("flask")
+flask_module.Blueprint = FakeBlueprint
+flask_module.request = SimpleNamespace()
+flask_module.jsonify = lambda payload: payload
+sys.modules["flask"] = flask_module
+
+from src.routes import query_routes
 
 
 class FakeCursor:
@@ -58,3 +76,33 @@ def test_charger_type_is_bound_as_sql_parameter():
     assert "charger__type = ?" in connection.fake_cursor.query
     assert malicious_filter not in connection.fake_cursor.query
     assert connection.fake_cursor.parameters == [-33.86, -33.86, 151.20, 30.0, malicious_filter]
+
+
+@pytest.mark.parametrize("payload", [None, [], {"longitude": 151.2}])
+def test_invalid_query_payload_returns_bad_request(monkeypatch, payload):
+    monkeypatch.setattr(query_routes.request, "get_json", lambda silent: payload, raising=False)
+
+    response, status_code = query_routes.query_intelligence()
+
+    assert status_code == 400
+    assert response["status"] == "error"
+
+
+def test_query_preserves_zero_valued_optional_parameters(monkeypatch):
+    payload = {
+        "latitude": 0,
+        "longitude": 0,
+        "destination_lat": 0,
+        "destination_lon": 0,
+        "hour_of_day": 0,
+    }
+    monkeypatch.setattr(query_routes.request, "get_json", lambda silent: payload, raising=False)
+    monkeypatch.setattr(query_routes, "get_consumer_intelligence", lambda **kwargs: kwargs)
+
+    response = query_routes.query_intelligence()
+
+    assert response["lat"] == 0
+    assert response["lon"] == 0
+    assert response["destination_lat"] == 0
+    assert response["destination_lon"] == 0
+    assert response["hour_of_day"] == 0
