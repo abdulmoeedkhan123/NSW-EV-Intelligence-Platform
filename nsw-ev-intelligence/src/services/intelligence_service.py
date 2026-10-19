@@ -69,9 +69,9 @@ def get_consumer_intelligence(
                     *,
                     -- Haversine distance calculation in SQL
                     2 * 6371 * ASIN(SQRT(
-                        POW(SIN(RADIANS(latitude - {lat}) / 2), 2) +
-                        COS(RADIANS({lat})) * COS(RADIANS(latitude)) *
-                        POW(SIN(RADIANS(longitude - {lon}) / 2), 2)
+                        POW(SIN(RADIANS(latitude - ?) / 2), 2) +
+                        COS(RADIANS(?)) * COS(RADIANS(latitude)) *
+                        POW(SIN(RADIANS(longitude - ?) / 2), 2)
                     )) AS distance_km
                 FROM {CHARGER_TABLE}
                 WHERE has_valid_location = TRUE
@@ -95,17 +95,19 @@ def get_consumer_intelligence(
                 hazard_types,
                 pcode
             FROM station_distances
-            WHERE distance_km <= {max_distance_km}
+            WHERE distance_km <= ?
             """
+            query_parameters = [lat, lat, lon, max_distance_km]
             
             # Add charger type filter if specified
             if charger_type:
-                sql_query += f" AND charger__type = '{charger_type}'"
+                sql_query += " AND charger__type = ?"
+                query_parameters.append(charger_type)
             
             sql_query += f" ORDER BY distance_km ASC LIMIT {DEFAULT_LIMIT_STATIONS}"
             
             print(f"Executing SQL query for lat={lat}, lon={lon}")
-            cursor.execute(sql_query)
+            cursor.execute(sql_query, query_parameters)
             
             # Fetch and format results
             charging_stations = []
