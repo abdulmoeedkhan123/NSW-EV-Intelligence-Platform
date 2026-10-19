@@ -41,11 +41,13 @@ else:
 
 # Test 2: Check imports
 print("\n2️⃣  Testing Python Imports...")
+dependencies_ok = True
 try:
     import streamlit as st
     print(f"   ✅ streamlit {st.__version__}")
 except ImportError as e:
     print(f"   ❌ streamlit not installed: {e}")
+    dependencies_ok = False
     sys.exit(1)
 
 try:
@@ -53,12 +55,14 @@ try:
     print(f"   ✅ pandas {pd.__version__}")
 except ImportError as e:
     print(f"   ❌ pandas not installed: {e}")
+    dependencies_ok = False
 
 try:
     import plotly
     print(f"   ✅ plotly {plotly.__version__}")
 except ImportError as e:
     print(f"   ❌ plotly not installed: {e}")
+    dependencies_ok = False
 
 # Test 3: Parse Python files for syntax errors
 print("\n3️⃣  Testing Python Syntax...")
@@ -154,8 +158,8 @@ except Exception as e:
 print("\n" + "="*70)
 print("\n📊 Test Summary:")
 print("   ✅ File structure: OK")
-print("   ✅ Python syntax: OK") 
-print("   ✅ Dependencies: OK")
+print("   " + ("✅ Python syntax: OK" if syntax_ok else "❌ Python syntax errors found"))
+print("   " + ("✅ Dependencies: OK" if dependencies_ok else "❌ Dependencies missing"))
 print("   ℹ️  Database: " + database_status)
 
 print("\n🎉 UI Application is ready to run!")

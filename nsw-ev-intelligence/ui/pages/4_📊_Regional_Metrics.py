@@ -169,14 +169,11 @@ if not df_regional.empty:
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.success(f"**Most EV-Ready Region**  
-{best_region}")
+        st.success(f"**Most EV-Ready Region**  \n{best_region}")
     with col2:
-        st.info(f"**Most EV Stations**  
-{most_stations}")
+        st.info(f"**Most EV Stations**  \n{most_stations}")
     with col3:
-        st.warning(f"**Highest Capacity**  
-{highest_capacity}")
+        st.warning(f"**Highest Capacity**  \n{highest_capacity}")
     
     # Full data download
     st.header("📥 Export Data")
