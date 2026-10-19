@@ -1,6 +1,6 @@
 """API routes for RAG-powered AI chat"""
 from flask import Blueprint, request, jsonify
-from datetime import datetime
+from datetime import datetime, timezone
 from src.services.rag_service import rag_pipeline
 
 chat_bp = Blueprint('chat', __name__)
@@ -33,7 +33,7 @@ def chat():
             "status": "success",
             "answer": result['answer'],
             "sources": result['sources'][:3],  # Return top 3 sources
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:

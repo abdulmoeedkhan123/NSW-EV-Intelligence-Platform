@@ -1,6 +1,6 @@
 """Intelligence service for EV charging station queries and analysis"""
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from src.services.sql_service import get_sql_connection
 from src.config.settings import CHARGER_TABLE, DEFAULT_MAX_DISTANCE_KM, DEFAULT_LIMIT_STATIONS
 
@@ -185,7 +185,7 @@ def get_consumer_intelligence(
         
         return {
             "status": "success",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "insights": insights
         }
         

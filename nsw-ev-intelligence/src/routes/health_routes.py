@@ -1,6 +1,6 @@
 """Health check and monitoring routes"""
 from flask import Blueprint, jsonify
-from datetime import datetime
+from datetime import datetime, timezone
 from src.services.sql_service import get_sql_connection
 
 health_bp = Blueprint('health', __name__)
@@ -17,5 +17,5 @@ def health():
     return jsonify({
         "status": "healthy",
         "database_connected": conn is not None,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     })
